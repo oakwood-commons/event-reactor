@@ -1,0 +1,34 @@
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
+
+listeners: []
+
+reactors:
+  - name: pr-comment
+    match: >
+      payload.action == "opened" &&
+      has(payload.pull_request)
+    provider: echo
+    inputs:
+      owner:
+        template: "{{ .payload.repository.owner.login }}"
+      repo:
+        template: "{{ .payload.repository.name }}"
+      number:
+        payloadValue:
+          propertyPaths:
+            - payload.number
+      body:
+        template: |
+          ## PR Review
+          **{{ .payload.pull_request.title }}**
+          Branch: {{ .payload.pull_request.head.ref }} → {{ .payload.pull_request.base.ref }}
+
+  - name: error-alert
+    match: >
+      has(payload.severity) &&
+      payload.severity == "ERROR"
+    provider: http
+    inputs:
+      method: POST
+      url: https://hooks.slack.com/services/T00/B00/xxx

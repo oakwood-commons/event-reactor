@@ -1,0 +1,68 @@
+# Visit https://goreleaser.com for documentation on how to customize this
+# behavior.
+# before:
+#   hooks:
+    # - go mod tidy
+    # - go test  ./...
+
+builds:
+  - env:
+      # goreleaser does not work with CGO, it could also complicate
+      # usage by users in CI/CD systems like Terraform Cloud where
+      # they are unable to install libraries.
+      - CGO_ENABLED=0
+    main: ./cmd/er
+    binary: "{{ .ProjectName }}"
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+          - -w
+          - -s
+          - -X main.Commit={{.Commit}}
+          - -X main.BuildVersion={{.Version}}
+          - -X main.BuildTime={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+archives:
+  - name_template: >-
+      {{- .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    format_overrides:
+      - goos: windows
+        format: zip
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+signs:
+  - artifacts: checksum
+    args:
+      # if you are using this in a GitHub action or some other automated pipeline, you
+      # need to pass the batch flag to indicate its not interactive.
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+# blobs:
+#   - provider: gs
+#     bucket: ???
+#     folder: "{{.ProjectName}}/{{.Version}}"
+release:
+  # If you want to manually examine the release before its live, uncomment this line:
+  draft: false
+  prerelease: auto
+changelog:
+  skip: false

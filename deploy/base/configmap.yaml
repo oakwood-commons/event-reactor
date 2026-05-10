@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: event-reactor-config
+data:
+  config.yaml: |
+    apiVersion: event-reactor.io/v1
+    kind: ServerConfig
+    server:
+      port: 8080
+      metricsPort: 9090
+    observability:
+      logging:
+        level: info
+        format: json
+    reactors: []

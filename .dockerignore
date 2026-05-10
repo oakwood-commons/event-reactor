@@ -1,0 +1,19 @@
+# Ignore build artifacts and dev files
+dist/
+_legacy/
+.git/
+.github/
+*.md
+!README.md
+Taskfile.yaml
+Makefile
+helper.ps1
+hack/
+docs/
+test/
+config/
+Dockerfile.local
+.vscode/
+.idea/
+coverage.out
+coverage.html

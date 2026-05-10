@@ -1,0 +1,30 @@
+{
+  "action": "opened",
+  "number": 42,
+  "pull_request": {
+    "title": "feat: add webhook listener",
+    "base": {
+      "ref": "main"
+    },
+    "head": {
+      "ref": "feature/webhooks"
+    },
+    "user": {
+      "login": "dev-user"
+    }
+  },
+  "repository": {
+    "name": "event-reactor",
+    "full_name": "oakwood-commons/event-reactor",
+    "owner": {
+      "login": "oakwood-commons"
+    }
+  },
+  "sender": {
+    "login": "dev-user"
+  },
+  "attributes": {
+    "eventType": "pull_request",
+    "source": "github"
+  }
+}

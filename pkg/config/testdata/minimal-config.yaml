@@ -1,0 +1,17 @@
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
+
+listeners:
+  - name: test
+    type: pubsub
+    config:
+      projectId: test-project
+      subscriptionId: test-sub
+
+reactors:
+  - name: echo
+    match: "true"
+    provider: http
+    inputs:
+      method: POST
+      url: http://localhost:9999/echo

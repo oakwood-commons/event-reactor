@@ -1,0 +1,14 @@
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
+
+server:
+  port: 18080
+
+listeners: []
+
+reactors:
+  - name: smoke-echo
+    match: "true"
+    provider: echo
+    inputs:
+      message: smoke test passed

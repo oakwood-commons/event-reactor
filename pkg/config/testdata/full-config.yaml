@@ -1,0 +1,101 @@
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
+
+server:
+  port: 8080
+  metricsPort: 9090
+  healthCheck:
+    liveness: /health/live
+    readiness: /health/ready
+
+observability:
+  logging:
+    level: info
+    format: json
+  tracing:
+    enabled: true
+    exporter: otlp
+    endpoint: localhost:4317
+    sampleRate: 0.1
+  metrics:
+    enabled: true
+    prometheus: true
+
+auth:
+  handlers:
+    - name: gcp
+      type: gcp
+    - name: github
+      type: github-app
+      config:
+        appId: 12345
+        installationId: 67890
+
+listeners:
+  - name: gcp-pubsub-events
+    type: pubsub
+    config:
+      projectId: my-project
+      subscriptionId: event-reactor-sub
+
+  - name: github-webhooks
+    type: webhook
+    config:
+      path: /webhooks/github
+
+reactors:
+  - name: pr-review-checklist
+    match: >
+      payload.action == "opened" &&
+      payload.pull_request.base.ref == "main"
+    provider: github
+    auth: github
+    failOnError: false
+    inputs:
+      operation: create-comment
+      owner:
+        template: "{{ .payload.repository.owner.login }}"
+      repo:
+        template: "{{ .payload.repository.name }}"
+      number:
+        template: "{{ .payload.pull_request.number }}"
+      body:
+        template: |
+          ## Review Checklist
+          - [ ] Tests pass
+          - [ ] Docs updated
+
+  - name: error-to-slack
+    match: >
+      has(payload.severity) &&
+      payload.severity in ["ERROR", "CRITICAL"]
+    provider: http
+    inputs:
+      method: POST
+      url: https://hooks.slack.com/services/T00/B00/xxx
+      headers:
+        expr: '{"Content-Type": "application/json"}'
+
+  - name: rotate-secrets
+    match: 'attributes.eventType == "SECRET_VERSION_EXPIRING"'
+    provider: exec
+    retry:
+      maxAttempts: 3
+      backoff: exponential
+    inputs:
+      command: /usr/local/bin/rotate-secret.sh
+      secretName:
+        payloadValue:
+          propertyPaths:
+            - attributes.secretName
+      rotationKey:
+        valueFrom:
+          secretKeyRef:
+            name: rotation-keys
+            projectId: my-project
+            version: latest
+            path: keys.default
+      gcpProject:
+        fromEnv: GCP_PROJECT
+      scriptConfig:
+        fromFile: /etc/config/rotate-config.json

@@ -1,0 +1,17 @@
+{
+  "severity": "ERROR",
+  "textPayload": "Connection refused: database-prod:5432",
+  "resource": {
+    "type": "k8s_container",
+    "labels": {
+      "pod_name": "api-server-abc123",
+      "namespace_name": "production",
+      "container_name": "api"
+    }
+  },
+  "timestamp": "2026-05-10T12:00:00Z",
+  "attributes": {
+    "eventType": "log_entry",
+    "source": "gcp-logging"
+  }
+}

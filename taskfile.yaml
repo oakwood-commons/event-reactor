@@ -1,0 +1,177 @@
+# https://taskfile.dev
+version: "3"
+
+vars:
+  MODULE: github.com/oakwood-commons/event-reactor
+  OUTPUT_FILE: '{{if eq OS "windows"}}dist/er.exe{{else}}dist/er{{end}}'
+  BUILD_DATE:
+    sh: date --iso=seconds 2>/dev/null || powershell -c "Get-Date -Format o"
+  BUILD_COMMIT:
+    sh: git rev-parse HEAD
+  BUILD_VERSION:
+    sh: git describe --abbrev=0 --tags 2>/dev/null || echo "dev"
+  SERVER_CONFIG_FILE: test/files/serverConfig.yaml
+  LDFLAGS: >-
+    -X {{.MODULE}}/pkg/params/version.BuildTime={{.BUILD_DATE}}
+    -X {{.MODULE}}/pkg/params/version.BuildVersion={{.BUILD_VERSION}}
+    -X {{.MODULE}}/pkg/params/version.Commit={{.BUILD_COMMIT}}
+  TIMEOUT_UNIT: 20m
+  TIMEOUT_E2E: 20m
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list-all
+    silent: true
+
+  # ── Build ──────────────────────────────────────────────────────────
+
+  build:
+    desc: Build the er CLI binary
+    cmds:
+      - echo "Building CLI → {{.OUTPUT_FILE}}"
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_FILE}} ./cmd/er
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.OUTPUT_FILE}}"
+
+  # ── Run ────────────────────────────────────────────────────────────
+
+  api-server:
+    desc: Build and run the API server
+    deps: [build]
+    cmds:
+      - ./{{.OUTPUT_FILE}} run server -c {{.SERVER_CONFIG_FILE}}
+
+  # ── Clean ──────────────────────────────────────────────────────────
+
+  clean:
+    desc: Remove build artifacts and test cache
+    cmds:
+      - rm -rf dist/
+      - go clean -testcache
+
+  # ── Modules ────────────────────────────────────────────────────────
+
+  mod:
+    desc: Tidy and verify Go modules
+    cmds:
+      - go mod tidy
+      - go mod verify
+
+  # ── Format ─────────────────────────────────────────────────────────
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - gofumpt -l -w .
+
+  fmt:check:
+    desc: Check formatting (no changes)
+    cmds:
+      - test -z "$(gofumpt -l .)" || { gofumpt -l .; exit 1; }
+
+  # ── Lint ───────────────────────────────────────────────────────────
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  # ── Vet ────────────────────────────────────────────────────────────
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  # ── Security ───────────────────────────────────────────────────────
+
+  vuln:
+    desc: Run govulncheck
+    cmds:
+      - govulncheck ./...
+
+  security:scan:
+    desc: Run gosec security scanner
+    cmds:
+      - gosec ./...
+
+  # ── Test ───────────────────────────────────────────────────────────
+
+  test:
+    desc: Run all unit tests
+    cmds:
+      - go clean -testcache
+      - go test -timeout {{.TIMEOUT_UNIT}} -cover ./...
+
+  test:verbose:
+    desc: Run unit tests with verbose output
+    cmds:
+      - go clean -testcache
+      - go test -timeout {{.TIMEOUT_UNIT}} -v -cover ./...
+
+  test:race:
+    desc: Run unit tests with race detector
+    cmds:
+      - go clean -testcache
+      - go test -timeout {{.TIMEOUT_UNIT}} -race -cover ./...
+
+  test:failfast:
+    desc: Run unit tests, stop on first failure
+    cmds:
+      - go clean -testcache
+      - go test -timeout {{.TIMEOUT_UNIT}} -failfast -cover ./...
+
+  test:e2e:
+    desc: Run end-to-end tests
+    env:
+      INTEGRATION_TEST: "TRUE"
+    cmds:
+      - go test -timeout {{.TIMEOUT_E2E}} -failfast -count=1 ./test
+
+  # ── Coverage ───────────────────────────────────────────────────────
+
+  coverage:
+    desc: Generate test coverage report
+    cmds:
+      - go test -timeout {{.TIMEOUT_UNIT}} -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report → coverage.html"
+
+  # ── Docs ───────────────────────────────────────────────────────────
+
+  docs:
+    desc: Generate CLI documentation
+    cmds:
+      - go run ./cmd/gen-docs --standard --doc-path docs/event-reactor
+
+  docs:custom:
+    desc: Generate custom CLI documentation
+    cmds:
+      - go run ./cmd/gen-docs --custom --doc-path docs/event-reactor-custom
+
+  # ── Install tools ─────────────────────────────────────────────────
+
+  install-tools:
+    desc: Install development tools
+    cmds:
+      - go install mvdan.cc/gofumpt@latest
+      - go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+  # ── CI ─────────────────────────────────────────────────────────────
+
+  ci:
+    desc: Run the full CI pipeline locally
+    cmds:
+      - task: mod
+      - task: vet
+      - task: lint
+      - task: test:race
+      - task: build

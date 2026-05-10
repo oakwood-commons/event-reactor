@@ -1,0 +1,26 @@
+# Build artifacts
+/dist/
+*.tar.gz
+*.sha256
+*.zip
+
+# Test and coverage
+coverage.out
+coverage.html
+**/got.json
+**/want.json
+**/got.txt
+**/want.txt
+
+# IDE and local
+.idea/
+.vscode/settings.json
+/local
+/logs
+
+# Plugin cache
+.er/
+
+# Misc
+Dockerfile.local
+.task/

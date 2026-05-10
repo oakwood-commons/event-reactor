@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/oakwood-commons/event-reactor/pkg/config"
@@ -14,6 +15,20 @@ import (
 	"github.com/oakwood-commons/event-reactor/pkg/message"
 	ertmpl "github.com/oakwood-commons/event-reactor/pkg/template"
 )
+
+// authHeaderKey is the context key for auth header injection.
+type authHeaderKey struct{}
+
+// WithAuthHeader returns a context carrying the Authorization header value.
+func WithAuthHeader(ctx context.Context, header string) context.Context {
+	return context.WithValue(ctx, authHeaderKey{}, header)
+}
+
+// AuthHeader extracts the Authorization header from context, if present.
+func AuthHeader(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(authHeaderKey{}).(string)
+	return v, ok && v != ""
+}
 
 // Provider executes a reaction with the given resolved inputs.
 // Implementations wrap scafctl providers, HTTP calls, shell commands, etc.
@@ -79,6 +94,7 @@ func (r *Registry) Providers() []string {
 	for name := range r.providers {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -101,12 +117,12 @@ func ResolveInputs(cfg config.ReactorConfig, event message.Event, m *matcher.Mat
 // resolveInput resolves a single InputValue against the event.
 // Resolution priority: secretKeyRef > payloadValue > fromFile > fromEnv > expr > template > static.
 func resolveInput(iv config.InputValue, event message.Event, m *matcher.Matcher) (any, error) {
-	// Secret refs (stub — requires auth handler integration)
+	// Secret refs (stub -- requires auth handler integration)
 	if ref := iv.SecretRef(); ref != nil {
 		return nil, fmt.Errorf("secret resolution not yet implemented (secret: %s/%s)", ref.ProjectID, ref.Name)
 	}
 
-	// Payload value paths — evaluate CEL paths, first match wins
+	// Payload value paths -- evaluate CEL paths, first match wins
 	if paths := iv.PayloadPaths(); len(paths) > 0 {
 		data := event.AsMap()
 		for _, path := range paths {
@@ -132,12 +148,12 @@ func resolveInput(iv config.InputValue, event message.Event, m *matcher.Matcher)
 		return os.Getenv(envVar), nil
 	}
 
-	// CEL expression — evaluate and return result
+	// CEL expression -- evaluate and return result
 	if expr := iv.Expr(); expr != "" {
 		return evalCELValue(expr, m, event.AsMap())
 	}
 
-	// Go template — render against event data
+	// Go template -- render against event data
 	if tmpl := iv.Template(); tmpl != "" {
 		return ertmpl.Render(tmpl, event.AsMap())
 	}

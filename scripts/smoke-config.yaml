@@ -1,0 +1,36 @@
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
+
+server:
+  port: 8088
+  healthCheck:
+    liveness: /health/live
+    readiness: /health/ready
+
+observability:
+  logging:
+    level: debug
+    format: text
+
+reactors:
+  - name: echo-all
+    match: "true"
+    provider: echo
+    inputs:
+      greeting: "Hello from event-reactor!"
+      event_id:
+        expr: "id"
+      event_source:
+        expr: "source"
+      event_type:
+        expr: "type"
+      action:
+        expr: 'has(payload.action) ? payload.action : "n/a"'
+
+  - name: log-all
+    match: "true"
+    provider: log
+    inputs:
+      level: info
+      message:
+        template: "Processed event {{ .id }} from {{ .source }}"

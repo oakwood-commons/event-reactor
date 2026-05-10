@@ -34,9 +34,13 @@ func TestLoad_FullConfig(t *testing.T) {
 	assert.True(t, cfg.Observability.Metrics.Prometheus)
 
 	// Auth
-	require.Len(t, cfg.Auth.Handlers, 2)
-	assert.Equal(t, "gcp", cfg.Auth.Handlers[0].Name)
-	assert.Equal(t, "github-app", cfg.Auth.Handlers[1].Type)
+	require.Len(t, cfg.Auth.Handlers, 3)
+	assert.Equal(t, "github", cfg.Auth.Handlers[0].Name)
+	assert.Equal(t, "github-app", cfg.Auth.Handlers[0].Type)
+	assert.Equal(t, "static-token", cfg.Auth.Handlers[1].Type)
+	assert.Equal(t, "service-account", cfg.Auth.Handlers[2].Type)
+	require.Len(t, cfg.Auth.WebhookSecrets, 1)
+	assert.Equal(t, "github", cfg.Auth.WebhookSecrets[0].Source)
 
 	// Listeners
 	require.Len(t, cfg.Listeners, 2)

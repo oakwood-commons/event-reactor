@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/oakwood-commons/event-reactor/pkg/message"
@@ -18,15 +20,19 @@ const readHeaderTimeout = 5 * time.Second
 // Listener accepts events via HTTP POST on the configured port/path.
 type Listener struct {
 	name    string
+	host    string
 	port    int
 	path    string
 	logger  *slog.Logger
 	handler func(context.Context, message.Event)
+	addr    string        // actual address after Start binds
+	ready   chan struct{} // closed when the listener is bound and serving
 }
 
 // Config for the generic HTTP listener.
 type Config struct {
 	Name string
+	Host string // bind address (default: all interfaces)
 	Port int
 	Path string
 }
@@ -38,13 +44,21 @@ func New(cfg Config, logger *slog.Logger) *Listener {
 	}
 	return &Listener{
 		name:   cfg.Name,
+		host:   cfg.Host,
 		port:   cfg.Port,
 		path:   cfg.Path,
 		logger: logger,
+		ready:  make(chan struct{}),
 	}
 }
 
 func (l *Listener) Name() string { return l.name }
+
+// Addr returns the listener's bound address. Blocks until the listener is ready.
+func (l *Listener) Addr() string {
+	<-l.ready
+	return l.addr
+}
 
 func (l *Listener) Start(ctx context.Context, handler func(context.Context, message.Event)) error {
 	l.handler = handler
@@ -52,16 +66,24 @@ func (l *Listener) Start(ctx context.Context, handler func(context.Context, mess
 	mux := http.NewServeMux()
 	mux.HandleFunc(l.path, l.handlePush)
 
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", net.JoinHostPort(l.host, strconv.Itoa(l.port)))
+	if err != nil {
+		close(l.ready)
+		return fmt.Errorf("listening on %s:%d: %w", l.host, l.port, err)
+	}
+	l.addr = ln.Addr().String()
+
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", l.port),
 		Handler:           mux,
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		l.logger.Info("generic listener started", slog.Int("port", l.port), slog.String("path", l.path))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		l.logger.Info("generic listener started", slog.String("addr", l.addr), slog.String("path", l.path))
+		close(l.ready)
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
 	}()

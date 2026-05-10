@@ -113,8 +113,8 @@ func TestMatcher_Match(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "invalid expression",
-			expr: `invalid %%% expression`,
+			name:    "invalid expression",
+			expr:    `invalid %%% expression`,
 			wantErr: true,
 		},
 	}

@@ -1,0 +1,65 @@
+# Hugo Configuration for event-reactor
+# Documentation: https://gohugo.io/getting-started/configuration/
+
+baseURL: "https://oakwood-commons.github.io/event-reactor/"
+languageCode: "en-us"
+title: "event-reactor"
+enableRobotsTXT: true
+
+# Use Hugo Modules for theme (no git submodule needed)
+module:
+  imports:
+    - path: github.com/alex-shpak/hugo-book
+  mounts:
+    - source: docs
+      target: content/docs
+    - source: home
+      target: content
+
+# Repository information
+params:
+  description: "Event-driven automation engine -- listen, match, react"
+  github_repo: "https://github.com/oakwood-commons/event-reactor"
+  github_project_repo: "https://github.com/oakwood-commons/event-reactor"
+  # Book theme specific
+  BookMenuBundle: /menu
+  BookSection: docs
+  BookRepo: "https://github.com/oakwood-commons/event-reactor"
+  BookEditLink: "https://github.com/oakwood-commons/event-reactor/edit/main/{{ .Path }}"
+  BookDateFormat: "January 2, 2006"
+  BookSearch: true
+  BookComments: false
+  BookToC: true
+
+# Enable syntax highlighting
+markup:
+  highlight:
+    style: github-dark
+    lineNos: false
+    codeFences: true
+    guessSyntax: true
+  goldmark:
+    renderer:
+      unsafe: true
+
+# Menu structure
+menu:
+  before: []
+  after:
+    - name: "GitHub"
+      url: "https://github.com/oakwood-commons/event-reactor"
+      weight: 10
+
+# Output formats
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON
+
+# Enable JSON for search
+outputFormats:
+  JSON:
+    mediaType: application/json
+    baseName: search
+    isPlainText: true

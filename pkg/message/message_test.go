@@ -52,7 +52,8 @@ func TestFromPubSubPush(t *testing.T) {
 				assert.Equal(t, "msg-001", ev.ID)
 				assert.Equal(t, "pubsub", ev.Source)
 				assert.Equal(t, "pull_request", ev.Attributes["eventType"])
-				payload := ev.Payload.(map[string]any)
+				payload, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "opened", payload["action"])
 				assert.Equal(t, float64(42), payload["number"])
 			},
@@ -67,7 +68,8 @@ func TestFromPubSubPush(t *testing.T) {
 			},
 			check: func(t *testing.T, ev Event) {
 				assert.Equal(t, "msg-002", ev.ID)
-				payload := ev.Payload.(map[string]any)
+				payload, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "value", payload["key"])
 			},
 		},
@@ -80,7 +82,8 @@ func TestFromPubSubPush(t *testing.T) {
 				},
 			},
 			check: func(t *testing.T, ev Event) {
-				payload := ev.Payload.(map[string]any)
+				payload, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "ok", payload["status"])
 			},
 		},
@@ -110,9 +113,9 @@ func TestFromPubSubPush(t *testing.T) {
 			},
 		},
 		{
-			name:    "missing message field",
+			name:     "missing message field",
 			envelope: map[string]any{},
-			wantErr: "missing 'message' field",
+			wantErr:  "missing 'message' field",
 		},
 		{
 			name: "message is not an object",
@@ -163,7 +166,8 @@ func TestFromGenericPayload(t *testing.T) {
 			},
 			check: func(t *testing.T, ev Event) {
 				assert.Equal(t, "prod", ev.Attributes["env"])
-				p := ev.Payload.(map[string]any)
+				p, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "created", p["action"])
 			},
 		},
@@ -174,8 +178,10 @@ func TestFromGenericPayload(t *testing.T) {
 				{"name": "b"},
 			},
 			check: func(t *testing.T, ev Event) {
-				p := ev.Payload.(map[string]any)
-				items := p["items"].([]map[string]any)
+				p, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
+				items, ok := p["items"].([]map[string]any)
+				require.True(t, ok)
 				assert.Len(t, items, 2)
 			},
 		},
@@ -183,8 +189,10 @@ func TestFromGenericPayload(t *testing.T) {
 			name:    "slice of any payload",
 			payload: []any{"x", "y"},
 			check: func(t *testing.T, ev Event) {
-				p := ev.Payload.(map[string]any)
-				items := p["items"].([]any)
+				p, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
+				items, ok := p["items"].([]any)
+				require.True(t, ok)
 				assert.Equal(t, []any{"x", "y"}, items)
 			},
 		},

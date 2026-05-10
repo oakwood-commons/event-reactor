@@ -34,7 +34,7 @@ func TestHTTP_Success(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}))
 	defer ts.Close()
 
@@ -44,7 +44,8 @@ func TestHTTP_Success(t *testing.T) {
 		"body": map[string]any{"key": "value"},
 	}, testEvent())
 	require.NoError(t, err)
-	out := result.Output.(map[string]any)
+	out, ok := result.Output.(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, 200, out["statusCode"])
 }
 
@@ -67,6 +68,40 @@ func TestHTTP_MissingURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "url is required")
 }
 
+func TestHTTP_AuthHeaderInjection(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer secret-token", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	p := NewHTTP()
+	ctx := reactor.WithAuthHeader(context.Background(), "Bearer secret-token")
+	result, err := p.Execute(ctx, map[string]any{
+		"url": ts.URL,
+	}, testEvent())
+	require.NoError(t, err)
+	out, ok := result.Output.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, 200, out["statusCode"])
+}
+
+func TestHTTP_StringBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "text/plain", r.Header.Get("Content-Type"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	p := NewHTTP()
+	_, err := p.Execute(context.Background(), map[string]any{
+		"url":         ts.URL,
+		"body":        "plain text",
+		"contentType": "text/plain",
+	}, testEvent())
+	require.NoError(t, err)
+}
+
 func TestExec_Success(t *testing.T) {
 	p := &Exec{Logger: slog.New(slog.NewTextHandler(os.Stderr, nil))}
 	assert.Equal(t, "exec", p.Name())
@@ -86,7 +121,8 @@ func TestExec_Success(t *testing.T) {
 		"args":    args,
 	}, testEvent())
 	require.NoError(t, err)
-	out := result.Output.(map[string]any)
+	out, ok := result.Output.(map[string]any)
+	require.True(t, ok)
 	assert.Contains(t, out["stdout"], "hello")
 	assert.Equal(t, 0, out["exitCode"])
 }
@@ -98,7 +134,8 @@ func TestLog(t *testing.T) {
 
 	result, err := p.Execute(context.Background(), map[string]any{"level": "info", "message": "test"}, testEvent())
 	require.NoError(t, err)
-	out := result.Output.(map[string]any)
+	out, ok := result.Output.(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, true, out["logged"])
 }
 

@@ -23,9 +23,8 @@ func testMatcher(t *testing.T) *matcher.Matcher {
 
 // fakeProvider is a test double for Provider.
 type fakeProvider struct {
-	name   string
-	output any
-	err    error
+	name string
+	err  error
 }
 
 func (f *fakeProvider) Name() string { return f.name }
@@ -62,9 +61,7 @@ func TestRegistry_Providers(t *testing.T) {
 	r.Register(&fakeProvider{name: "github"})
 
 	names := r.Providers()
-	assert.Len(t, names, 2)
-	assert.Contains(t, names, "http")
-	assert.Contains(t, names, "github")
+	assert.Equal(t, []string{"github", "http"}, names)
 }
 
 func TestResolveInputs_Static(t *testing.T) {

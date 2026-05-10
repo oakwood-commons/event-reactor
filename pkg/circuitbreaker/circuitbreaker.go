@@ -58,10 +58,10 @@ func (b *Breaker) Allow() bool {
 	defer b.mu.Unlock()
 
 	switch b.currentState() {
+	case Closed, HalfOpen:
+		return true
 	case Open:
 		return false
-	case HalfOpen:
-		return true // allow one test request
 	default:
 		return true
 	}

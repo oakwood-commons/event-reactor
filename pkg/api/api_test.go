@@ -3,6 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -55,7 +58,7 @@ func testServer(t *testing.T, reactors ...config.ReactorConfig) *Server {
 func TestHealthLiveness(t *testing.T) {
 	s := testServer(t)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/health/live", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 	s.Router().ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -65,7 +68,7 @@ func TestHealthLiveness(t *testing.T) {
 func TestHealthReadiness(t *testing.T) {
 	s := testServer(t)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/health/ready", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil)
 	s.Router().ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -84,7 +87,7 @@ func TestHandleEvent_ValidPayload(t *testing.T) {
 
 	body := `{"action": "opened"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(body))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	s.Router().ServeHTTP(w, req)
 
@@ -98,7 +101,7 @@ func TestHandleEvent_ValidPayload(t *testing.T) {
 func TestHandleEvent_InvalidJSON(t *testing.T) {
 	s := testServer(t)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/events", bytes.NewBufferString("not json"))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	s.Router().ServeHTTP(w, req)
 
@@ -116,7 +119,7 @@ func TestHandleEvent_NoMatchingReactors(t *testing.T) {
 
 	body := `{"action": "opened"}`
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(body))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	s.Router().ServeHTTP(w, req)
 
@@ -124,4 +127,130 @@ func TestHandleEvent_NoMatchingReactors(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, float64(0), resp["processed"])
+}
+
+func TestHandleCloudEvent_InvalidJSON(t *testing.T) {
+	srv := testServer(t)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/cloudevents", bytes.NewBufferString("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid JSON payload")
+}
+
+func TestHandleCloudEvent_StructuredNoData(t *testing.T) {
+	srv := testServer(t, config.ReactorConfig{
+		Name:     "test-echo",
+		Match:    "true",
+		Provider: "echo",
+		Inputs: map[string]config.InputValue{
+			"msg": config.NewInputStatic("hello"),
+		},
+	})
+
+	// CloudEvent with no "data" field -- entire body becomes payload
+	ce := map[string]any{
+		"specversion": "1.0",
+		"id":          "no-data-001",
+		"source":      "/test/source",
+		"type":        "com.example.nodata",
+	}
+	body, _ := json.Marshal(ce)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/cloudevents", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(1), resp["processed"])
+}
+
+func TestHandleCloudEvent_BinaryInvalidJSON(t *testing.T) {
+	srv := testServer(t)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/cloudevents", bytes.NewBufferString("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Ce-Type", "com.example.test")
+	req.Header.Set("Ce-Source", "/test")
+	req.Header.Set("Ce-Id", "bad-001")
+	req.Header.Set("Ce-Specversion", "1.0")
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleWebhook_XSignature256Header(t *testing.T) {
+	srv := testServer(t)
+	srv.cfg.Auth.WebhookSecrets = []config.WebhookSecret{{Source: "alt", Secret: "altsecret"}}
+
+	payload := []byte(`{"event":"test"}`)
+	mac := hmac.New(sha256.New, []byte("altsecret"))
+	mac.Write(payload)
+	sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/alt", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature-256", sig) // alternative header
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleWebhook_MissingSignature(t *testing.T) {
+	srv := testServer(t)
+	srv.cfg.Auth.WebhookSecrets = []config.WebhookSecret{{Source: "secure", Secret: "mysecret"}}
+
+	payload := []byte(`{"event":"deploy"}`)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/secure", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	// No signature header at all
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandleWebhook_InvalidJSON(t *testing.T) {
+	srv := testServer(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/github", bytes.NewBufferString("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid JSON payload")
+}
+
+func TestHandleWebhook_GitHubEventHeader(t *testing.T) {
+	srv := testServer(t, config.ReactorConfig{
+		Name:     "test-echo",
+		Match:    "true",
+		Provider: "echo",
+		Inputs: map[string]config.InputValue{
+			"msg": config.NewInputStatic("hello"),
+		},
+	})
+
+	payload := []byte(`{"action":"opened"}`)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/github", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	srv.Router().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, float64(1), resp["processed"])
 }

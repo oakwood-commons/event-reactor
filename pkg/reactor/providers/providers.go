@@ -74,6 +74,11 @@ func (h *HTTP) Execute(ctx context.Context, inputs map[string]any, _ message.Eve
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	// Auth token injected via context by the adapter when reactor references an auth handler
+	if authHeader, ok := reactor.AuthHeader(ctx); ok {
+		req.Header.Set("Authorization", authHeader)
+	}
+
 	if headers, ok := inputs["headers"].(map[string]any); ok {
 		for k, v := range headers {
 			req.Header.Set(k, fmt.Sprint(v))

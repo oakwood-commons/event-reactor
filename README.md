@@ -1,166 +1,177 @@
 # event-reactor
 
-The event-reactor is an API designed to listen to and react to events from Google Cloud Pub/Sub. It provides a robust set of features that allow for a wide range of responses to these events, making it a versatile tool for managing and responding to data flow.
+Event-driven automation engine. Listens for events, matches them with CEL expressions, and dispatches reactions via pluggable providers.
 
-One of the key features of event-reactor is its ability to filter incoming events based on their attributes or payload. This is achieved using the Common Expression Language (CEL) developed by Google, which provides a simple and efficient way to manage event data.
+## Features
 
-The event-reactor API comes with a variety of built-in reactions to events. These include sending an email, creating a GitHub commit and pull request comment, executing a PowerShell command or script, and sending a webhook. Future updates will also add the ability to execute a bash command or script, send a pub/sub event, and create a Webex message.
+- **Event Sources**: HTTP push (`/events`, `/cloudevents`, `/webhook/:source`), GCP Pub/Sub (planned)
+- **Matching**: [CEL](https://github.com/google/cel-go) expressions with compiled caching
+- **Providers**: echo, http, exec, log (extensible via the Provider interface)
+- **Templating**: Go `text/template` with custom functions for input resolution
+- **Auth**: Named auth handlers (static tokens, GitHub App, GitHub PAT, OAuth2 client credentials, GCP service account) injected into outbound calls
+- **Webhook Validation**: HMAC-SHA256 signature verification on inbound webhooks
+- **Config Hot-Reload**: File watcher reloads config on changes (fsnotify)
+- **Reliability**: Token-bucket rate limiter, circuit breaker
+- **MCP Server**: Model Context Protocol over stdio for AI-assisted configuration
+- **CLI**: `er test match|template|config|reactor` for local development/testing
 
-In addition to these reactions, event-reactor also supports several methods for getting property data. These include static values, values from attributes or payloads (with support for multiple property paths), environment variables, files, and Google Cloud Platform (GCP). This flexibility allows for a wide range of data sources to be used in reactions.
-
-The API also supports the use of Go templating to transform property values, providing further flexibility in how data is handled and used. In the future, event-reactor will also support extensions, allowing for the addition of new reactions beyond those built into the API.
-
-In summary, event-reactor is a powerful and flexible API for managing and responding to GCP pub/sub events, with a wide range of features and capabilities.
-
-## Feature List
-
-- Ability to filter incoming events on attributes or the payload using [CEL](https://github.com/google/cel-go)
-- Has the following built-in reactions
-  - Send email
-  - Creating a github commit and pull request comment
-  - Execute a PowerShell command/script
-  - Send a webhook
-  - (Coming soon) Execute a bash command/script
-  - (Coming soon) Send a pub/sub event
-  - (Coming soon) Create a Webex message
-- Supports getting property data in the following ways
-  - Static value
-  - Value from attributes or payload
-    - Supports multiple property paths
-  - From environment variable
-  - From a file
-  - From GCP
-- Supports the use of go templating to transform the property values
-- (Coming soon) Supports extensions to extend the reactions it supports
-- echo endpoint for testing purposes
-
-## Discovery
-
-### List Reactors
-
-Execute the command to get a list of all the available reactors
+## Quick Start
 
 ```bash
-er get reactor
+# Build
+task build
+
+# Run server
+dist/er run server --config config.yaml
+
+# Test a CEL expression against an event
+dist/er test match 'payload.action == "opened"' -e event.json
+
+# Render a template
+dist/er test template -t 'PR #{{ .payload.number }}' -e event.json
+
+# Validate config
+dist/er test config config.yaml
+
+# Dry-run a reactor
+dist/er test reactor -c config.yaml -e event.json -n my-reactor --dry-run
+
+# Start MCP server
+dist/er mcp
 ```
 
-> Example Output
+## Configuration
 
-```bash
-EMAIL: This reactor sends an email to the specified recipient(s) using the supplied smtp server and credentials. The email subject and body can be templated using Go's text/template package. The email is retried up to the specified number of times if it fails to send.
+```yaml
+apiVersion: event-reactor.io/v1
+kind: ServerConfig
 
-POWERSHELL: This reactor executes a powershell command. The parameter values support go templating.
+server:
+  port: 8080
+  metricsPort: 9090
 
-WEBHOOK: This reactor sends a webhook to a specified URL. The payload of the webhook is the event data.
+observability:
+  logging:
+    level: info
+    format: json
 
-GITHUB/COMMENT: This reactor writes comments on commits and pull requests. It requires a GitHub token with appropriate permissions to interact with the specified repository. Key inputs include the organization, repository, commit SHA, and pull request number. One of the standout features of this reactor is its support for Go templating, which can be used to customize the heading and body of the comments. The heading also plays a crucial role in identifying previous comments for deletion. Moreover, the reactor offers a suite of configuration options for enhanced control. These include the ability to purge existing comments from all commits associated with a pull request, remove comments from the pull request itself, and eliminate duplicate commit comments.
-```
+auth:
+  handlers:
+    - name: github
+      type: github-app
+      config:
+        appId: "12345"
+        installationId: "67890"
+        privateKeyPath: /etc/secrets/github-app.pem
 
-### Get Reactor Details
+    - name: slack
+      type: static-token
+      config:
+        token: xoxb-slack-bot-token
 
-Execute the command to get a list of all the available reactors
+    - name: gcp
+      type: service-account
+      defaultScopes:
+        - https://www.googleapis.com/auth/cloud-platform
+      config:
+        keyFile: /etc/secrets/sa-key.json
 
-```bash
-er get reactor --name email
-```
+  webhookSecrets:
+    - source: github
+      secret: whsec_abc123
 
-> Example Output
+listeners:
+  - name: github-webhooks
+    type: webhook
+    config:
+      path: /webhooks/github
 
-```bash
-NAME
-  email
-
-DESCRIPTION
-  This reactor sends an email to the specified recipient(s) using the supplied smtp server and credentials. The email subject and body can be templated using Go's text/template package. The email is retried up to the specified number of times if it fails to send.
-
-PROPERTIES
-
-  from
-    The email address of the sender
-
-    Required:                 true
-    Type:                     string
-
-
-  password
-    The password for the smtp server
-
-    Required:                 true
-    Type:                     string
-
-
-  to
-    The email address of the recipient(s). Multiple addresses can be separated by a comma, semicolon, or space
-
-    Required:                 true
-    Type:                     string
-
-
-  subject
-    The subject of the email. This field supports go templating
-
-    Required:                 true
-    Type:                     string
-
-
-  body
-    The body of the email. This field supports go templating
-
-    Required:                 true
-    Type:                     string
-
-
-  smtpHost
-    The smtp server host
-
-    Required:                 true
-    Type:                     string
-
-
-  smtpPort
-    The smtp server port
-
-    Required:                 true
-    Type:                     string
-
-
-  maxRetries
-    The maximum number of times to retry sending the email. Defaults to 5
-
-    Required:                 false
-    Type:                     string
-
-
-EXAMPLE CONFIG
-
-  reactorConfigs:
-  - name: test_email
-    celExpressionFilter: attributes.test == 'email'
-    type: email
-    properties:
-      subject:
-        value: Testing email
-      from:
-        value: someone@somewhere.com
-      password:
-        valueFrom:
-          secretKeyRef:
-            name: some_secret_for_email
-            projectId: some-gcp-project
-            version: latest
-      to:
-        value: someoneelse@somewherelese.com
+reactors:
+  - name: pr-comment
+    match: >
+      payload.action == "opened" &&
+      has(payload.pull_request)
+    provider: http
+    auth: github
+    inputs:
+      method: POST
+      url:
+        template: >-
+          https://api.github.com/repos/{{ .payload.repository.full_name }}/issues/{{ .payload.number }}/comments
       body:
-        value: this is a test email from event reactor
-      smtpHost:
-        value: smpt.com
-      smtpPort:
-        value: "587"
-      maxRetries:
-        value: "5"
+        template: '{"body": "Thanks for the PR!"}'
+
+  - name: error-to-slack
+    match: >
+      has(payload.severity) &&
+      payload.severity == "ERROR"
+    provider: http
+    auth: slack
+    inputs:
+      method: POST
+      url: https://slack.com/api/chat.postMessage
+      body:
+        template: '{"channel": "#alerts", "text": "Error: {{ .payload.message }}"}'
 ```
 
+### Auth Handler Types
 
-## Links
+| Type | Description | Required Config |
+|------|-------------|-----------------|
+| `static-token` | Fixed bearer token | `token`, optional `tokenType` |
+| `github-token` | GitHub PAT | `token` |
+| `github-app` | GitHub App installation token | `appId`, `installationId`, `privateKeyPath` |
+| `oauth2-client-credentials` | OAuth2 client credentials flow | `tokenUrl`, `clientId`, `clientSecret` |
+| `service-account` | GCP service account | `keyFile` |
 
-- [protobuf/avro payload integration](https://cloud.google.com/pubsub/docs/samples/pubsub-subscribe-avro-records-with-revisions?hl=en)
+Reactors reference auth handlers by name via the `auth` field. The resolved token is injected as the `Authorization` header on outbound HTTP calls.
+
+### Input Resolution
+
+Reactor inputs support multiple resolution strategies (highest priority first):
+
+| Source | Config | Description |
+|--------|--------|-------------|
+| Secret | `valueFrom.secretKeyRef` | GCP Secret Manager |
+| Payload | `payloadValue.propertyPaths` | CEL path into event payload |
+| File | `fromFile` | Read from local file |
+| Env | `fromEnv` | Environment variable |
+| Expr | `expr` | CEL expression |
+| Template | `template` | Go template with event data |
+| Static | scalar value | Literal value |
+
+## Architecture
+
+```
+Event Source --> Listener --> Adapter --> Matcher (CEL) --> Reactor
+                                                            |
+                                                   Auth + Input Resolution
+                                                            |
+                                                         Provider
+                                                     (echo/http/exec/log)
+```
+
+## Development
+
+```bash
+task build          # Build binary to dist/
+task test           # Run tests
+task lint           # golangci-lint
+task vet            # go vet
+task coverage       # Coverage report
+```
+
+## Deployment
+
+Kustomize manifests in `deploy/`:
+
+```bash
+kubectl apply -k deploy/base           # Minimal deployment
+kubectl apply -k deploy/production     # HPA + PDB + resource tuning
+```
+
+Container images published to `ghcr.io/oakwood-commons/event-reactor` on tag push.
+
+## License
+
+Apache License 2.0

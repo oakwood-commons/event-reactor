@@ -28,7 +28,7 @@ func testCmd() *cobra.Command {
 	return cmd
 }
 
-// ── er test match ──────────────────────────────────────────────────
+// -- er test match -------------------------------------------------------
 
 func testMatchCmd() *cobra.Command {
 	var eventFile string
@@ -56,9 +56,9 @@ func testMatchCmd() *cobra.Command {
 			}
 
 			if matched {
-				cmd.Println("✓ MATCH")
+				cmd.Println("MATCH")
 			} else {
-				cmd.Println("✗ NO MATCH")
+				cmd.Println("NO MATCH")
 			}
 			return nil
 		},
@@ -70,7 +70,7 @@ func testMatchCmd() *cobra.Command {
 	return cmd
 }
 
-// ── er test template ───────────────────────────────────────────────
+// -- er test template ----------------------------------------------------
 
 func testTemplateCmd() *cobra.Command {
 	var (
@@ -82,7 +82,7 @@ func testTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "template",
 		Short: "Render a Go template against an event",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			tmpl, err := resolveTemplate(templateStr, templateFile)
 			if err != nil {
 				return err
@@ -111,7 +111,7 @@ func testTemplateCmd() *cobra.Command {
 	return cmd
 }
 
-// ── er test config ─────────────────────────────────────────────────
+// -- er test config ------------------------------------------------------
 
 func testConfigCmd() *cobra.Command {
 	return &cobra.Command{
@@ -124,7 +124,7 @@ func testConfigCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Printf("✓ Config valid: %d listener(s), %d reactor(s)\n",
+			cmd.Printf("Config valid: %d listener(s), %d reactor(s)\n",
 				len(cfg.Listeners), len(cfg.Reactors))
 
 			// Also pre-compile all CEL expressions
@@ -141,26 +141,26 @@ func testConfigCmd() *cobra.Command {
 				}
 			}
 
-			cmd.Println("✓ All CEL expressions valid")
+			cmd.Println("All CEL expressions valid")
 			return nil
 		},
 	}
 }
 
-// ── er test reactor ────────────────────────────────────────────────
+// -- er test reactor -----------------------------------------------------
 
 func testReactorCmd() *cobra.Command {
 	var (
-		configFile string
-		eventFile  string
+		configFile  string
+		eventFile   string
 		reactorName string
-		dryRun     bool
+		dryRun      bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "reactor",
 		Short: "Dry-run or execute a reactor against an event",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(configFile)
 			if err != nil {
 				return err
@@ -194,10 +194,10 @@ func testReactorCmd() *cobra.Command {
 			}
 
 			if !matched {
-				cmd.Println("✗ Event does not match reactor expression")
+				cmd.Println("Event does not match reactor expression")
 				return nil
 			}
-			cmd.Println("✓ Event matches reactor expression")
+			cmd.Println("Event matches reactor expression")
 
 			// Resolve inputs
 			resolved, err := reactor.ResolveInputs(*rc, event, m)
@@ -206,7 +206,7 @@ func testReactorCmd() *cobra.Command {
 			}
 
 			if dryRun {
-				cmd.Println("\n── Resolved Inputs (dry-run) ──")
+				cmd.Println("\n-- Resolved Inputs (dry-run) --")
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(resolved)
@@ -228,7 +228,7 @@ func testReactorCmd() *cobra.Command {
 	return cmd
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
+// -- Helpers --------------------------------------------------------------
 
 func loadEventFile(path string) (message.Event, error) {
 	data, err := os.ReadFile(path)

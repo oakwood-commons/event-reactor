@@ -23,9 +23,9 @@ builds:
     ldflags:
           - -w
           - -s
-          - -X main.Commit={{.Commit}}
-          - -X main.BuildVersion={{.Version}}
-          - -X main.BuildTime={{.Date}}
+          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.Commit={{.Commit}}
+          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildVersion={{.Version}}
+          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildTime={{.Date}}
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath

@@ -12,6 +12,7 @@ import (
 
 	"github.com/oakwood-commons/event-reactor/pkg/adapter"
 	"github.com/oakwood-commons/event-reactor/pkg/api"
+	"github.com/oakwood-commons/event-reactor/pkg/auth"
 	"github.com/oakwood-commons/event-reactor/pkg/config"
 	"github.com/oakwood-commons/event-reactor/pkg/matcher"
 	"github.com/oakwood-commons/event-reactor/pkg/mcp"
@@ -45,7 +46,7 @@ func versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Println(version.String())
 			return nil
 		},
@@ -68,7 +69,7 @@ func serverCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Start the event-reactor server",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runServer(configFile)
 		},
 	}
@@ -104,12 +105,21 @@ func runServer(configFile string) error {
 		}
 	}
 
-	// Set up registry (no providers registered yet — will be wired later)
+	// Set up registry (no providers registered yet -- will be wired later)
 	reg := reactor.NewRegistry()
 	providers.RegisterAll(reg, logger)
 
 	// Set up adapter
 	a := adapter.New(cfg, m, reg, logger)
+
+	// Set up auth handlers
+	if len(cfg.Auth.Handlers) > 0 {
+		authReg, err := auth.NewRegistry(cfg.Auth.Handlers)
+		if err != nil {
+			return fmt.Errorf("initializing auth: %w", err)
+		}
+		a.WithAuth(authReg)
+	}
 
 	// Set up HTTP server
 	srv := api.New(cfg, a, logger)
@@ -130,7 +140,7 @@ func mcpCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Start MCP server (Model Context Protocol) over stdio",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 			reg := reactor.NewRegistry()
 			srv := mcp.New(reg, logger)

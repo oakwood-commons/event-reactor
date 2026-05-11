@@ -48,14 +48,14 @@ func TestSmoke_ServerEndToEnd(t *testing.T) {
 	// Health check
 	t.Run("liveness", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodGet, "/health/live", nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 		srv.Router().ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("readiness", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodGet, "/health/ready", nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil)
 		srv.Router().ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
@@ -64,7 +64,7 @@ func TestSmoke_ServerEndToEnd(t *testing.T) {
 	t.Run("event_pipeline", func(t *testing.T) {
 		body := `{"action": "test", "source": "smoke"}`
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(body))
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
 		srv.Router().ServeHTTP(w, req)
 
@@ -93,7 +93,7 @@ func TestSmoke_ServerEndToEnd(t *testing.T) {
 		for i := range 5 {
 			body := fmt.Sprintf(`{"iteration": %d}`, i)
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(body))
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
 			req.Header.Set("Content-Type", "application/json")
 			srv.Router().ServeHTTP(w, req)
 			assert.Equal(t, http.StatusOK, w.Code)

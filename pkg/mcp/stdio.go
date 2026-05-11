@@ -96,7 +96,7 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer, se
 
 		resp := s.handleRequest(ctx, req, serverVersion)
 		if resp == nil {
-			// Notification — no response needed
+			// Notification -- no response needed
 			continue
 		}
 

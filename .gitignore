@@ -5,8 +5,10 @@
 *.zip
 
 # Test and coverage
-coverage.out
+*.out
+*.test
 coverage.html
+/.cover/
 **/got.json
 **/want.json
 **/got.txt
@@ -20,6 +22,21 @@ coverage.html
 
 # Plugin cache
 .er/
+
+# Hugo generated site
+/public/
+/resources/_gen/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temp / swap files
+*.tmp
+*.swp
+*.swo
+*~
 
 # Misc
 Dockerfile.local

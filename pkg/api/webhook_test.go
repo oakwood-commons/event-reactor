@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -32,7 +33,7 @@ func TestHandleCloudEvent_Structured(t *testing.T) {
 	body, _ := json.Marshal(ce)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/cloudevents", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/cloudevents", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(w, req)
 
@@ -50,7 +51,7 @@ func TestHandleCloudEvent_Binary(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"action": "opened"})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/cloudevents", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/cloudevents", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Ce-Id", "bin-456")
 	req.Header.Set("Ce-Source", "/binary/source")
@@ -68,7 +69,7 @@ func TestHandleWebhook_NoSecret(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"event": "push"})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/webhook/github", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/github", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Event", "push")
 	router.ServeHTTP(w, req)
@@ -91,7 +92,7 @@ func TestHandleWebhook_ValidHMAC(t *testing.T) {
 	sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/webhook/secure", bytes.NewReader(payload))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/secure", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Hub-Signature-256", sig)
 	router.ServeHTTP(w, req)
@@ -107,7 +108,7 @@ func TestHandleWebhook_InvalidHMAC(t *testing.T) {
 	payload := []byte(`{"event":"deploy"}`)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/webhook/secure", bytes.NewReader(payload))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/webhook/secure", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Hub-Signature-256", "sha256=invalid")
 	router.ServeHTTP(w, req)

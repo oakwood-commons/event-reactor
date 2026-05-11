@@ -1,28 +1,17 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Package",
+      "name": "Launch Server",
       "type": "go",
       "request": "launch",
       "mode": "auto",
-      "program": "${workspaceRoot}/cmd/er/er.go",
+      "program": "${workspaceRoot}/cmd/er",
       "cwd": "${workspaceRoot}",
-      "buildFlags": "-ldflags '-X github.com/kcloutie/event-reactor/pkg/params/version.BuildVersion=1.0.0 -X github.com/kcloutie/event-reactor/pkg/params/version.Commit=123456789 -X github.com/kcloutie/event-reactor/pkg/params/version.BuildTime=12/06/1976'",
-      "env": {
-        "LOG_LEVEL":"DEBUG",
-        "EVENT_REACTOR_LOG": "CONSOLEJSON",
-        // "GIN_MODE": "release"
-      },
+      "buildFlags": "-ldflags '-X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildVersion=dev -X github.com/oakwood-commons/event-reactor/pkg/params/version.Commit=local -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildTime=now'",
       "args": [
-        // "run", "server", "-c", "test/files/mytesting.yaml", "--debug"
-        "run", "server", "-c", "local/rotatePassword.yaml", "--debug"
-
-        // "run", "server", "-c", "test/files/serverConfig.json", "--debug"
+        "run", "server", "-c", "test/testdata/smoke-config.yaml"
       ]
-    },
+    }
   ]
 }

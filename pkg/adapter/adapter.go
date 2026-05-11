@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/oakwood-commons/event-reactor/pkg/auth"
 	"github.com/oakwood-commons/event-reactor/pkg/config"
 	"github.com/oakwood-commons/event-reactor/pkg/matcher"
 	"github.com/oakwood-commons/event-reactor/pkg/message"
@@ -20,6 +21,7 @@ type Adapter struct {
 	cfg      *config.ServerConfig
 	matcher  *matcher.Matcher
 	registry *reactor.Registry
+	auth     *auth.Registry
 	logger   *slog.Logger
 }
 
@@ -31,6 +33,12 @@ func New(cfg *config.ServerConfig, m *matcher.Matcher, r *reactor.Registry, logg
 		registry: r,
 		logger:   logger,
 	}
+}
+
+// WithAuth sets the auth registry for token injection.
+func (a *Adapter) WithAuth(ar *auth.Registry) *Adapter {
+	a.auth = ar
+	return a
 }
 
 // HandleEvent evaluates all reactor configs against the event and dispatches
@@ -92,6 +100,30 @@ func (a *Adapter) executeReactor(ctx context.Context, rc config.ReactorConfig, e
 			ReactorName: rc.Name,
 			Error:       fmt.Sprintf("resolving inputs: %v", err),
 		}
+	}
+
+	// Inject auth token if the reactor references an auth handler
+	if rc.Auth != "" {
+		if a.auth == nil {
+			log.ErrorContext(ctx, "reactor requires auth but no auth registry configured",
+				slog.String("auth", rc.Auth))
+			return reactor.Result{
+				Provider:    rc.Provider,
+				ReactorName: rc.Name,
+				Error:       fmt.Sprintf("reactor %q requires auth handler %q but no auth registry is configured", rc.Name, rc.Auth),
+			}
+		}
+		tok, err := a.auth.GetToken(ctx, rc.Auth)
+		if err != nil {
+			log.ErrorContext(ctx, "failed to resolve auth token",
+				slog.String("auth", rc.Auth), slog.String("error", err.Error()))
+			return reactor.Result{
+				Provider:    rc.Provider,
+				ReactorName: rc.Name,
+				Error:       fmt.Sprintf("auth token: %v", err),
+			}
+		}
+		ctx = reactor.WithAuthHeader(ctx, tok.Header())
 	}
 
 	// Look up provider

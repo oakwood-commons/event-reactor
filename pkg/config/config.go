@@ -61,10 +61,15 @@ type MetricsConfig struct {
 	Prometheus bool `yaml:"prometheus" json:"prometheus"`
 }
 
-// AuthConfig holds the set of configured auth handlers.
+// AuthConfig holds authentication configuration for inbound validation
+// and outbound token generation.
 type AuthConfig struct {
-	Handlers       []AuthHandlerConfig `yaml:"handlers"       json:"handlers"`
-	WebhookSecrets []WebhookSecret     `yaml:"webhookSecrets" json:"webhookSecrets"`
+	// Handlers define named auth handlers for generating tokens on outbound calls.
+	// Reactors reference these by name via the "auth" field.
+	Handlers []AuthHandlerConfig `yaml:"handlers" json:"handlers"`
+
+	// WebhookSecrets define HMAC secrets for validating inbound webhook signatures.
+	WebhookSecrets []WebhookSecret `yaml:"webhookSecrets" json:"webhookSecrets"`
 }
 
 // WebhookSecret maps a webhook source to its HMAC secret.
@@ -73,11 +78,14 @@ type WebhookSecret struct {
 	Secret string `yaml:"secret" json:"secret"`
 }
 
-// AuthHandlerConfig defines a named auth handler.
+// AuthHandlerConfig defines a named auth handler for token generation.
+// Supported types: github-app, github-token, oauth2-client-credentials,
+// service-account, static-token.
 type AuthHandlerConfig struct {
-	Name   string         `yaml:"name"   json:"name"`
-	Type   string         `yaml:"type"   json:"type"`
-	Config map[string]any `yaml:"config" json:"config"`
+	Name          string         `yaml:"name"          json:"name"`
+	Type          string         `yaml:"type"          json:"type"`
+	DefaultScopes []string       `yaml:"defaultScopes" json:"defaultScopes"`
+	Config        map[string]any `yaml:"config"        json:"config"`
 }
 
 // ListenerConfig defines an event source.
@@ -162,12 +170,12 @@ func (iv *InputValue) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	// Try as complex input with special keys
-	var complex inputValueYAML
-	if err := node.Decode(&complex); err == nil {
-		if complex.Template != nil || complex.Expr != nil ||
-			complex.PayloadValue != nil || complex.ValueFrom != nil ||
-			complex.FromFile != nil || complex.FromEnv != nil {
-			iv.value = complex
+	var cplx inputValueYAML
+	if err := node.Decode(&cplx); err == nil {
+		if cplx.Template != nil || cplx.Expr != nil ||
+			cplx.PayloadValue != nil || cplx.ValueFrom != nil ||
+			cplx.FromFile != nil || cplx.FromEnv != nil {
+			iv.value = cplx
 			return nil
 		}
 	}

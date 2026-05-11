@@ -23,13 +23,29 @@ observability:
 
 auth:
   handlers:
-    - name: gcp
-      type: gcp
     - name: github
       type: github-app
       config:
-        appId: 12345
-        installationId: 67890
+        appId: "12345"
+        installationId: "67890"
+        privateKeyPath: /etc/secrets/github-app.pem
+
+    - name: slack-token
+      type: static-token
+      config:
+        token: xoxb-slack-bot-token
+        tokenType: Bearer
+
+    - name: gcp
+      type: service-account
+      defaultScopes:
+        - https://www.googleapis.com/auth/cloud-platform
+      config:
+        keyFile: /etc/secrets/sa-key.json
+
+  webhookSecrets:
+    - source: github
+      secret: whsec_abc123
 
 listeners:
   - name: gcp-pubsub-events

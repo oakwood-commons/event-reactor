@@ -3,9 +3,8 @@ version: "3"
 
 vars:
   MODULE: github.com/oakwood-commons/event-reactor
-  OUTPUT_FILE: '{{if eq OS "windows"}}dist/er.exe{{else}}dist/er{{end}}'
-  BUILD_DATE:
-    sh: date --iso=seconds 2>/dev/null || powershell -c "Get-Date -Format o"
+  OUTPUT_FILE: 'dist/er{{exeExt}}'
+  BUILD_DATE: '{{ now | date "2006-01-02T15:04:05Z07:00" }}'
   BUILD_COMMIT:
     sh: git rev-parse HEAD
   BUILD_VERSION:
@@ -17,6 +16,9 @@ vars:
     -X {{.MODULE}}/pkg/params/version.Commit={{.BUILD_COMMIT}}
   TIMEOUT_UNIT: 20m
   TIMEOUT_E2E: 20m
+
+env:
+  CGO_ENABLED: "0"
 
 tasks:
   default:
@@ -73,7 +75,13 @@ tasks:
   fmt:check:
     desc: Check formatting (no changes)
     cmds:
-      - test -z "$(gofumpt -l .)" || { gofumpt -l .; exit 1; }
+      - |
+        set -e
+        out=$(gofumpt -d .)
+        if [ -n "$out" ]; then
+          echo "$out"
+          exit 1
+        fi
 
   # ── Lint ───────────────────────────────────────────────────────────
 
@@ -154,6 +162,16 @@ tasks:
     desc: Generate custom CLI documentation
     cmds:
       - go run ./cmd/gen-docs --custom --doc-path docs/event-reactor-custom
+
+  docs:serve:
+    desc: Serve Hugo docs site locally (http://localhost:1313)
+    cmds:
+      - hugo server --buildDrafts --disableFastRender
+
+  docs:build:
+    desc: Build Hugo docs site to public/
+    cmds:
+      - hugo --minify
 
   # ── Install tools ─────────────────────────────────────────────────
 

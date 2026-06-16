@@ -65,13 +65,27 @@ func FromPubSubPush(envelope map[string]any) (Event, error) {
 		return Event{}, fmt.Errorf("'message' field is not an object")
 	}
 
+	attrs := extractAttributes(msgMap)
+
 	ev := Event{
-		Attributes: extractAttributes(msgMap),
+		Attributes: attrs,
 		Time:       time.Now(),
 		Source:     "pubsub",
 	}
 
 	ev.ID, _ = msgMap["messageId"].(string)
+
+	// CloudEvents Pub/Sub protocol binding places CE context attributes
+	// in message attributes with "ce-" prefix. Extract them to top-level fields.
+	if ceType := attrs["ce-type"]; ceType != "" {
+		ev.Type = ceType
+	}
+	if ceSource := attrs["ce-source"]; ceSource != "" {
+		ev.Source = ceSource
+	}
+	if ceID := attrs["ce-id"]; ceID != "" {
+		ev.ID = ceID
+	}
 
 	payload, err := decodeData(msgMap["data"])
 	if err != nil {

@@ -109,7 +109,19 @@ func (s *Server) handleEvent(c *gin.Context) {
 		return
 	}
 
-	event, err := message.FromGenericPayload(payload)
+	// Detect Pub/Sub push envelope: {"message": {"data": "...", ...}}
+	// Only route to FromPubSubPush when "message" is an object containing "data".
+	var event message.Event
+	var err error
+	if msg, ok := payload["message"].(map[string]any); ok {
+		if _, hasData := msg["data"]; hasData {
+			event, err = message.FromPubSubPush(payload)
+		} else {
+			event, err = message.FromGenericPayload(payload)
+		}
+	} else {
+		event, err = message.FromGenericPayload(payload)
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid event: %v", err)})
 		return

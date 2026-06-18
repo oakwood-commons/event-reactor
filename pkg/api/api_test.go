@@ -185,6 +185,90 @@ func TestHandleCloudEvent_BinaryInvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestHandleEvent_PubSubPushEnvelope(t *testing.T) {
+	// Reactor matches on Pub/Sub message attributes
+	srv := testServer(t, config.ReactorConfig{
+		Name:     "pubsub-test",
+		Provider: "echo",
+		Match:    `type == "com.example.test" && attributes["notification"] == "true"`,
+		Inputs: map[string]config.InputValue{
+			"matched": config.NewInputStatic("yes"),
+		},
+	})
+
+	// Pub/Sub push envelope with CloudEvents attributes
+	body := `{"message":{"data":"eyJhY3Rpb24iOiJ0ZXN0In0=","messageId":"msg-123","attributes":{"ce-type":"com.example.test","ce-source":"/test","notification":"true"}}}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	srv.Router().ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Processed int              `json:"processed"`
+		Results   []map[string]any `json:"results"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Processed, "Pub/Sub push with CE attrs should match")
+	require.Len(t, resp.Results, 1)
+	assert.Equal(t, "echo", resp.Results[0]["provider"])
+}
+
+func TestHandleEvent_GenericPayloadWithMessageField(t *testing.T) {
+	// A generic event with a "message" field (string, not Pub/Sub envelope)
+	// should NOT be misrouted to FromPubSubPush.
+	srv := testServer(t, config.ReactorConfig{
+		Name:     "generic-msg",
+		Provider: "echo",
+		Match:    "true",
+		Inputs: map[string]config.InputValue{
+			"got": config.NewInputStatic("it"),
+		},
+	})
+
+	body := `{"message": "hello", "action": "test"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	srv.Router().ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Processed int `json:"processed"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Processed, "generic payload with 'message' string should be processed normally")
+}
+
+func TestHandleEvent_MessageObjectWithoutData(t *testing.T) {
+	// A payload with "message" as an object but no "data" field
+	// should be treated as generic, not Pub/Sub push.
+	srv := testServer(t, config.ReactorConfig{
+		Name:     "generic-obj",
+		Provider: "echo",
+		Match:    "true",
+		Inputs: map[string]config.InputValue{
+			"got": config.NewInputStatic("it"),
+		},
+	})
+
+	body := `{"message": {"text": "hello", "sender": "bot"}}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/events", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	srv.Router().ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Processed int `json:"processed"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Processed, "message object without 'data' should be processed as generic")
+}
+
 func TestHandleWebhook_XSignature256Header(t *testing.T) {
 	srv := testServer(t)
 	srv.cfg.Auth.WebhookSecrets = []config.WebhookSecret{{Source: "alt", Secret: "altsecret"}}

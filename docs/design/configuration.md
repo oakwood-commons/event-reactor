@@ -127,6 +127,62 @@ Available in `template` inputs:
 | `default` | Default value if empty |
 | `toJSON` | Marshal to JSON string |
 
+## Listeners
+
+Listeners bring events into the reactor. Each entry has a `name`, a `type`, and a
+type-specific `config` block:
+
+```yaml
+listeners:
+  - name: <name>
+    type: <type>
+    config:
+      # type-specific settings
+```
+
+| Type | Delivery | Notes |
+|------|----------|-------|
+| `webhook` | HTTP push | Served by the built-in HTTP server on `/webhook/:source`. No background runtime. |
+| `cloudevents` | HTTP push | Served by the HTTP server on `/cloudevents`. No background runtime. |
+| `http` | HTTP push | Generic push served on `/events`. No background runtime. |
+| `pubsub` | Pull | Background listener that pulls from a GCP Pub/Sub subscription. |
+
+HTTP-served types (`webhook`, `cloudevents`, `http`) are handled by the API server
+routes, so declaring them is optional and starts no extra goroutine. The `pubsub`
+type starts a background listener that runs alongside the HTTP server; an unknown
+type fails startup.
+
+### Pub/Sub Pull Listener
+
+The `pubsub` listener pulls messages from an existing subscription using
+Application Default Credentials (ADC). It converts each message into the same
+event shape as HTTP push (attributes map to `ce-*` CloudEvent fields; the message
+body is decoded as the event payload), dispatches it through the matcher and
+reactors, then acks. Messages that fail conversion or whose handler panics are
+nacked so Pub/Sub can redeliver or route them to a dead-letter topic.
+
+```yaml
+listeners:
+  - name: platform-assets
+    type: pubsub
+    config:
+      projectId: my-gcp-project            # required
+      subscriptionId: platform-assets-sub  # required
+      maxOutstandingMessages: 100          # optional, flow-control cap
+      numGoroutines: 2                     # optional, concurrent pull streams
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `projectId` | yes | GCP project that owns the subscription. |
+| `subscriptionId` | yes | Existing Pub/Sub subscription ID to pull from. |
+| `maxOutstandingMessages` | no | Max unacked messages held locally (flow control). |
+| `numGoroutines` | no | Number of concurrent streaming-pull goroutines. |
+
+The reactor identity needs `roles/pubsub.subscriber` on the subscription. Ack
+deadlines, retry policy, and dead-lettering are properties of the subscription
+itself and are configured where the subscription is provisioned, not here.
+
 ## Hot-Reload
 
 The config file is watched via fsnotify. Changes are automatically applied without restarting the server. Invalid configs are rejected with an error log (the old config remains active).

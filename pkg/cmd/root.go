@@ -9,13 +9,16 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/oakwood-commons/event-reactor/pkg/adapter"
 	"github.com/oakwood-commons/event-reactor/pkg/api"
 	"github.com/oakwood-commons/event-reactor/pkg/auth"
 	"github.com/oakwood-commons/event-reactor/pkg/config"
+	"github.com/oakwood-commons/event-reactor/pkg/listener"
 	"github.com/oakwood-commons/event-reactor/pkg/matcher"
 	"github.com/oakwood-commons/event-reactor/pkg/mcp"
+	"github.com/oakwood-commons/event-reactor/pkg/message"
 	"github.com/oakwood-commons/event-reactor/pkg/observability"
 	"github.com/oakwood-commons/event-reactor/pkg/params/version"
 	"github.com/oakwood-commons/event-reactor/pkg/reactor"
@@ -121,6 +124,20 @@ func runServer(configFile string) error {
 		a.WithAuth(authReg)
 	}
 
+	// Build background listeners from config. Listener types served by the HTTP
+	// server (e.g. webhook) return nil here and are handled by srv below.
+	var listeners []listener.Listener
+	for _, lc := range cfg.Listeners {
+		l, err := listener.Build(lc, logger)
+		if err != nil {
+			return fmt.Errorf("building listener %q: %w", lc.Name, err)
+		}
+		if l == nil {
+			continue
+		}
+		listeners = append(listeners, l)
+	}
+
 	// Set up HTTP server
 	srv := api.New(cfg, a, logger)
 
@@ -131,9 +148,24 @@ func runServer(configFile string) error {
 	logger.Info("starting event-reactor",
 		slog.String("version", version.String()),
 		slog.Int("port", cfg.Server.Port),
+		slog.Int("listeners", len(listeners)),
 	)
 
-	return srv.Start(ctx)
+	// Run the HTTP server and all background listeners concurrently. The first
+	// fatal error cancels the shared context, shutting the others down cleanly.
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return srv.Start(ctx)
+	})
+	for _, l := range listeners {
+		g.Go(func() error {
+			return l.Start(ctx, func(ctx context.Context, ev message.Event) {
+				a.HandleEvent(ctx, ev)
+			})
+		})
+	}
+
+	return g.Wait()
 }
 
 func mcpCmd() *cobra.Command {

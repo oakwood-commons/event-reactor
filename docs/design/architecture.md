@@ -47,8 +47,9 @@ event-reactor is a single Go binary that receives events, evaluates CEL filter e
 | `pkg/circuitbreaker` | Circuit breaker for reactor fault isolation |
 | `pkg/cmd` | CLI command wiring (Cobra) |
 | `pkg/config` | YAML config loading, validation, defaults |
-| `pkg/listener` | Listener interface |
+| `pkg/listener` | Listener interface and config-driven factory |
 | `pkg/listener/generic` | Generic HTTP push listener |
+| `pkg/listener/pubsub` | GCP Pub/Sub pull listener |
 | `pkg/matcher` | CEL compilation, caching, evaluation |
 | `pkg/mcp` | MCP server (stdio JSON-RPC) for AI tooling |
 | `pkg/message` | Event struct, normalization helpers |

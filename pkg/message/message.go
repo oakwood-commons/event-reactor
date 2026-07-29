@@ -75,8 +75,52 @@ func FromPubSubPush(envelope map[string]any) (Event, error) {
 
 	ev.ID, _ = msgMap["messageId"].(string)
 
-	// CloudEvents Pub/Sub protocol binding places CE context attributes
-	// in message attributes with "ce-" prefix. Extract them to top-level fields.
+	applyCloudEventAttributes(&ev, attrs)
+
+	payload, err := decodeData(msgMap["data"])
+	if err != nil {
+		return Event{}, fmt.Errorf("decoding Pub/Sub data: %w", err)
+	}
+	ev.Payload = payload
+
+	return ev, nil
+}
+
+// FromPubSubMessage creates an Event from a GCP Pub/Sub message received via a
+// pull subscription. Unlike FromPubSubPush, which parses an HTTP push envelope,
+// this operates on the raw message fields (id, attributes, and data bytes) as
+// delivered by the Pub/Sub client library. The data is the already-decoded
+// message body (the client library base64-decodes the transport payload), so it
+// is expected to be raw JSON bytes; empty data yields an empty payload. Both
+// paths produce an equivalent Event shape so CEL matches behave identically
+// regardless of transport.
+func FromPubSubMessage(id string, attrs map[string]string, data []byte) (Event, error) {
+	if attrs == nil {
+		attrs = map[string]string{}
+	}
+
+	ev := Event{
+		ID:         id,
+		Attributes: attrs,
+		Time:       time.Now(),
+		Source:     "pubsub",
+	}
+
+	applyCloudEventAttributes(&ev, attrs)
+
+	payload, err := decodeData(data)
+	if err != nil {
+		return Event{}, fmt.Errorf("decoding Pub/Sub data: %w", err)
+	}
+	ev.Payload = payload
+
+	return ev, nil
+}
+
+// applyCloudEventAttributes maps CloudEvents context attributes carried in
+// Pub/Sub message attributes (the "ce-" prefixed keys from the CloudEvents
+// Pub/Sub protocol binding) onto the top-level Event fields.
+func applyCloudEventAttributes(ev *Event, attrs map[string]string) {
 	if ceType := attrs["ce-type"]; ceType != "" {
 		ev.Type = ceType
 	}
@@ -86,14 +130,6 @@ func FromPubSubPush(envelope map[string]any) (Event, error) {
 	if ceID := attrs["ce-id"]; ceID != "" {
 		ev.ID = ceID
 	}
-
-	payload, err := decodeData(msgMap["data"])
-	if err != nil {
-		return Event{}, fmt.Errorf("decoding Pub/Sub data: %w", err)
-	}
-	ev.Payload = payload
-
-	return ev, nil
 }
 
 // FromGenericPayload creates an Event from an already-decoded payload.
@@ -125,6 +161,9 @@ func decodeData(raw any) (any, error) {
 	case string:
 		return decodeStringData(d)
 	case []byte:
+		if len(d) == 0 {
+			return map[string]any{}, nil
+		}
 		var result map[string]any
 		if err := json.Unmarshal(d, &result); err != nil {
 			return nil, fmt.Errorf("unmarshaling data bytes: %w", err)

@@ -149,6 +149,126 @@ func TestFromPubSubPush(t *testing.T) {
 	}
 }
 
+func TestFromPubSubMessage(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string
+		attrs   map[string]string
+		data    []byte
+		wantErr string
+		check   func(t *testing.T, ev Event)
+	}{
+		{
+			name: "valid JSON data",
+			id:   "msg-001",
+			attrs: map[string]string{
+				"eventType": "pull_request",
+			},
+			data: []byte(`{"action":"opened","number":42}`),
+			check: func(t *testing.T, ev Event) {
+				assert.Equal(t, "msg-001", ev.ID)
+				assert.Equal(t, "pubsub", ev.Source)
+				assert.Equal(t, "pull_request", ev.Attributes["eventType"])
+				payload, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "opened", payload["action"])
+				assert.Equal(t, float64(42), payload["number"])
+			},
+		},
+		{
+			name: "raw JSON bytes",
+			id:   "msg-002",
+			data: []byte(`{"key":"value"}`),
+			check: func(t *testing.T, ev Event) {
+				assert.Equal(t, "msg-002", ev.ID)
+				payload, ok := ev.Payload.(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "value", payload["key"])
+			},
+		},
+		{
+			name: "cloudevents attributes map to top-level fields",
+			id:   "transport-id",
+			attrs: map[string]string{
+				"ce-type":   "com.ford.fcp.platform-assets.eamsId.notFound",
+				"ce-source": "https://platform-assets.fcp.ford.com/data-sync",
+				"ce-id":     "ce-999",
+			},
+			data: []byte(`{"data":{"new":{"billingID":"58655"}}}`),
+			check: func(t *testing.T, ev Event) {
+				assert.Equal(t, "com.ford.fcp.platform-assets.eamsId.notFound", ev.Type)
+				assert.Equal(t, "https://platform-assets.fcp.ford.com/data-sync", ev.Source)
+				assert.Equal(t, "ce-999", ev.ID, "ce-id overrides the transport message id")
+			},
+		},
+		{
+			name: "nil data yields empty payload",
+			id:   "msg-004",
+			data: nil,
+			check: func(t *testing.T, ev Event) {
+				assert.Equal(t, map[string]any{}, ev.Payload)
+			},
+		},
+		{
+			name:  "nil attributes are normalized to empty map",
+			id:    "msg-005",
+			attrs: nil,
+			data:  []byte(`{}`),
+			check: func(t *testing.T, ev Event) {
+				assert.NotNil(t, ev.Attributes)
+				assert.Empty(t, ev.Attributes)
+			},
+		},
+		{
+			name:    "invalid data",
+			id:      "msg-006",
+			data:    []byte("not-json-and-not-base64!!!"),
+			wantErr: "decoding Pub/Sub data",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ev, err := FromPubSubMessage(tc.id, tc.attrs, tc.data)
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			tc.check(t, ev)
+		})
+	}
+}
+
+func TestFromPubSubMessage_MatchesPushShape(t *testing.T) {
+	data := []byte(`{"data":{"new":{"billingID":"58655"}}}`)
+	attrs := map[string]string{
+		"ce-type":      "com.ford.fcp.platform-assets.eamsId.notFound",
+		"ce-source":    "https://platform-assets.fcp.ford.com/data-sync",
+		"ce-id":        "ce-abc",
+		"notification": "true",
+	}
+
+	push, err := FromPubSubPush(map[string]any{
+		"message": map[string]any{
+			"messageId":  "transport-id",
+			"data":       string(data),
+			"attributes": attrs,
+		},
+	})
+	require.NoError(t, err)
+
+	pull, err := FromPubSubMessage("transport-id", attrs, data)
+	require.NoError(t, err)
+
+	assert.Equal(t, push.ID, pull.ID)
+	assert.Equal(t, push.Type, pull.Type)
+	assert.Equal(t, push.Source, pull.Source)
+	assert.Equal(t, push.Attributes, pull.Attributes)
+	assert.Equal(t, push.Payload, pull.Payload)
+}
+
 func TestFromGenericPayload(t *testing.T) {
 	tests := []struct {
 		name    string

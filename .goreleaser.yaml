@@ -1,36 +1,44 @@
-# Visit https://goreleaser.com for documentation on how to customize this
-# behavior.
-# before:
-#   hooks:
-    # - go mod tidy
-    # - go test  ./...
+# GoReleaser configuration -- https://goreleaser.com
+#
+# Produces cross-platform binaries, archives, SHA256 checksums, SBOMs, and a
+# multi-arch container image. The image is built FROM the same prebuilt
+# binaries that are attached to the GitHub Release, so consumers get bit-for-bit
+# identical artifacts whether they download a binary or pull the image.
+#
+# Signing is keyless via cosign (Sigstore OIDC) -- no long-lived keys/secrets.
+version: 2
+
+project_name: event-reactor
 
 builds:
-  - env:
-      # goreleaser does not work with CGO, it could also complicate
-      # usage by users in CI/CD systems like Terraform Cloud where
-      # they are unable to install libraries.
-      - CGO_ENABLED=0
+  - id: er
     main: ./cmd/er
-    binary: "{{ .ProjectName }}"
+    binary: er
+    env:
+      # CGO must be disabled for static, cross-compiled, reproducible binaries.
+      - CGO_ENABLED=0
     goos:
-      - windows
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
-    ldflags:
-          - -w
-          - -s
-          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.Commit={{.Commit}}
-          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildVersion={{.Version}}
-          - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildTime={{.Date}}
-    mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X github.com/oakwood-commons/event-reactor/pkg/params/version.Commit={{ .Commit }}
+      - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildVersion={{ .Version }}
+      - -X github.com/oakwood-commons/event-reactor/pkg/params/version.BuildTime={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
 archives:
-  - name_template: >-
+  - id: er
+    ids:
+      - er
+    name_template: >-
       {{- .ProjectName }}_
       {{- .Version }}_
       {{- title .Os }}_
@@ -40,29 +48,114 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: ["zip"]
+
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
+
+# Software Bill of Materials (syft) for every archive, attached to the release.
+sboms:
+  - artifacts: archive
+
+# Keyless cosign signature over the checksum file. Verifiers can validate every
+# released artifact transitively through the signed checksums.
 signs:
-  - artifacts: checksum
+  - cmd: cosign
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    output: true
     args:
-      # if you are using this in a GitHub action or some other automated pipeline, you
-      # need to pass the batch flag to indicate its not interactive.
-      - "--batch"
-      - "--local-user"
-      - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
-      - "--output"
-      - "${signature}"
-      - "--detach-sign"
+      - "sign-blob"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
       - "${artifact}"
-# blobs:
-#   - provider: gs
-#     bucket: ???
-#     folder: "{{.ProjectName}}/{{.Version}}"
+      - "--yes"
+
+# Multi-arch container image built from the prebuilt binaries above.
+dockers:
+  - id: er-amd64
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-amd64"
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Major }}.{{ .Minor }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Event-driven automation engine"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.source=https://github.com/oakwood-commons/event-reactor"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+  - id: er-arm64
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-arm64"
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Major }}.{{ .Minor }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Event-driven automation engine"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.source=https://github.com/oakwood-commons/event-reactor"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-amd64"
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/oakwood-commons/event-reactor:{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Major }}.{{ .Minor }}-arm64"
+  - name_template: "ghcr.io/oakwood-commons/event-reactor:latest"
+    # Do not move `latest` onto a prerelease (e.g. -rc) tag.
+    skip_push: auto
+    image_templates:
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-amd64"
+      - "ghcr.io/oakwood-commons/event-reactor:{{ .Version }}-arm64"
+
+# Keyless cosign signature over the published image manifests (by digest).
+docker_signs:
+  - cmd: cosign
+    artifacts: manifests
+    output: true
+    args:
+      - "sign"
+      - "${artifact}@${digest}"
+      - "--yes"
+
 release:
-  # If you want to manually examine the release before its live, uncomment this line:
   draft: false
   prerelease: auto
+
 changelog:
-  skip: false
+  disable: false
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^chore:'
+      - '^test:'
+      - '^ci:'

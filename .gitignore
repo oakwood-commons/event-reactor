@@ -27,6 +27,11 @@ coverage.html
 /public/
 /resources/_gen/
 
+# Generated CLI reference (produced on demand via `task docs`; the curated
+# reference lives in docs/cli.md)
+/docs/event-reactor/
+/docs/event-reactor-custom/
+
 # OS junk
 .DS_Store
 Thumbs.db

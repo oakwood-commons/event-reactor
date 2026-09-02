@@ -26,3 +26,12 @@ Filter events using [CEL](https://github.com/google/cel-go) expressions with com
 Dispatch to pluggable providers (echo, http, exec, log) with templated inputs and auth injection.
 
 {{< /columns >}}
+
+## Documentation
+
+- [Getting Started](getting-started/) -- run event-reactor and react to your first event.
+- [API Reference](api/) -- endpoints, request formats, and the event model.
+- [CLI Reference](cli/) -- the `er` command and its subcommands.
+- [Operations](operations/) -- deployment, health checks, and verifying signed artifacts.
+- [Design & Architecture](design/) -- architecture, configuration, providers, and auth.
+

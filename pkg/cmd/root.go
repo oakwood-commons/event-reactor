@@ -30,6 +30,12 @@ func Execute() error {
 	return rootCmd().Execute()
 }
 
+// NewRootCmd returns the fully assembled root command tree. Exposed for CLI
+// documentation generation (see ./cmd/gen-docs).
+func NewRootCmd() *cobra.Command {
+	return rootCmd()
+}
+
 func rootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "er",

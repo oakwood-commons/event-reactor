@@ -2,6 +2,12 @@
 
 Event-driven automation engine. Listens for events, matches them with CEL expressions, and dispatches reactions via pluggable providers.
 
+Full documentation: <https://oakwood-commons.github.io/event-reactor/>
+([Getting Started](https://oakwood-commons.github.io/event-reactor/docs/getting-started/) |
+[API](https://oakwood-commons.github.io/event-reactor/docs/api/) |
+[CLI](https://oakwood-commons.github.io/event-reactor/docs/cli/) |
+[Operations](https://oakwood-commons.github.io/event-reactor/docs/operations/))
+
 ## Features
 
 - **Event Sources**: HTTP push (`/events`, `/cloudevents`, `/webhook/:source`), GCP Pub/Sub (planned)
@@ -38,6 +44,53 @@ dist/er test reactor -c config.yaml -e event.json -n my-reactor --dry-run
 
 # Start MCP server
 dist/er mcp
+```
+
+## Install
+
+Every tagged release publishes signed binaries, archives, `SHA256SUMS`, SBOMs,
+and a multi-arch container image built from the same binaries.
+
+### Binary
+
+Download the archive for your platform from the
+[Releases](https://github.com/oakwood-commons/event-reactor/releases) page,
+then extract and run:
+
+```bash
+tar -xzf event-reactor_<version>_Linux_x86_64.tar.gz
+./er version
+```
+
+### Container image
+
+```bash
+docker pull ghcr.io/oakwood-commons/event-reactor:latest
+docker run --rm -p 8080:8080 -p 9090:9090 \
+  -v "$PWD/config.yaml:/config/server.yaml:ro" \
+  ghcr.io/oakwood-commons/event-reactor:latest
+```
+
+Tags: `latest`, `X.Y.Z` (exact version), and `X.Y` (minor track).
+
+### Verify artifacts
+
+Signatures are keyless (Sigstore/cosign). Verify the checksums, then any
+artifact against them:
+
+```bash
+cosign verify-blob \
+  --certificate event-reactor_<version>_SHA256SUMS.pem \
+  --signature event-reactor_<version>_SHA256SUMS.sig \
+  --certificate-identity-regexp 'https://github.com/oakwood-commons/event-reactor/.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  event-reactor_<version>_SHA256SUMS
+
+# Verify the container image
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/oakwood-commons/event-reactor/.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/oakwood-commons/event-reactor:<version>
 ```
 
 ## Configuration

@@ -28,6 +28,9 @@ jobs:
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
 
+      - name: Docs generator smoke check
+        run: go run ./cmd/gen-docs --standard --doc-path "${RUNNER_TEMP}/gen-docs-check"
+
       - name: Upload coverage
         uses: actions/upload-artifact@v7
         with:

@@ -1,6 +1,6 @@
 ---
 title: "Design"
-weight: 1
+weight: 10
 bookCollapseSection: false
 ---
 

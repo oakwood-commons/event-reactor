@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1
+#
+# Runtime image for GoReleaser. It consumes the prebuilt `er` binary that
+# GoReleaser places in the build context, so the image ships the exact same
+# binary attached to the GitHub Release (no in-image compilation).
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY er /usr/bin/er
+
+EXPOSE 8080 9090
+
+ENTRYPOINT ["/usr/bin/er"]
+CMD ["run", "server", "-c", "/config/server.yaml"]

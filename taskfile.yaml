@@ -163,6 +163,11 @@ tasks:
     cmds:
       - go run ./cmd/gen-docs --custom --doc-path docs/event-reactor-custom
 
+  docs:check:
+    desc: Verify the CLI docs generator runs cleanly (CI health check)
+    cmds:
+      - go run ./cmd/gen-docs --standard --doc-path .task/gen-docs-check
+
   docs:serve:
     desc: Serve Hugo docs site locally (http://localhost:1313)
     cmds:
@@ -172,6 +177,23 @@ tasks:
     desc: Build Hugo docs site to public/
     cmds:
       - hugo --minify
+
+  # ── Release ────────────────────────────────────────────────────────
+
+  release:
+    desc: Build and publish a release with GoReleaser (requires a git tag)
+    cmds:
+      - goreleaser release --clean
+
+  release:local:
+    desc: Dry-run a release locally (no publish, no signing/push)
+    cmds:
+      - goreleaser release --snapshot --clean --skip=sign,sbom,publish
+
+  release:check:
+    desc: Validate the GoReleaser configuration
+    cmds:
+      - goreleaser check
 
   # ── Install tools ─────────────────────────────────────────────────
 

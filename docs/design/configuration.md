@@ -52,10 +52,11 @@ auth:
       secret: whsec_abc123
 
 listeners:
+  # Declaring a webhook listener is optional -- the route is always served at
+  # /webhook/<source>. The <source> segment (e.g. "github") is matched against
+  # auth.webhookSecrets[].source for HMAC validation.
   - name: github-webhooks
     type: webhook
-    config:
-      path: /webhooks/github
 
 reactors:
   - name: pr-comment
@@ -148,7 +149,9 @@ listeners:
 | `pubsub` | Pull | Background listener that pulls from a GCP Pub/Sub subscription. |
 
 HTTP-served types (`webhook`, `cloudevents`, `http`) are handled by the API server
-routes, so declaring them is optional and starts no extra goroutine. The `pubsub`
+routes, so declaring them is optional and starts no extra goroutine. Their
+endpoint paths are fixed (`/webhook/:source`, `/cloudevents`, `/events`) and are
+not configurable via `config.path`. The `pubsub`
 type starts a background listener that runs alongside the HTTP server; an unknown
 type fails startup.
 

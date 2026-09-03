@@ -1,6 +1,6 @@
 module github.com/oakwood-commons/event-reactor
 
-go 1.26.6
+go 1.27.1
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.7.0
